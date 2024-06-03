@@ -4,9 +4,11 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from pydantic import BaseModel
 import sqlite3
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
 # 加載 .env 文件中的環境變量
 load_dotenv()
@@ -25,9 +27,20 @@ app.add_middleware(
 # 獲取環境變量中的 SECRET_KEY
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 2
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 設置Token在2分鐘後過期
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# 創建Token的函數
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 # 獲取當前Token
 async def get_current_token(token: str = Depends(oauth2_scheme)):
@@ -38,6 +51,13 @@ async def get_current_token(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        exp = payload.get("exp")
+        if exp and datetime.utcfromtimestamp(exp) < datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         if payload.get("sub") != "data_access":
             raise credentials_exception
     except JWTError:
