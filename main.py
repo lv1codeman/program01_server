@@ -27,7 +27,7 @@ app.add_middleware(
 # 獲取環境變量中的 SECRET_KEY
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 設置Token在2分鐘後過期
+ACCESS_TOKEN_EXPIRE_MINUTES = 1  # 設置Token在2分鐘後過期
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -62,6 +62,14 @@ async def get_current_token(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+
+@app.post("/token", response_model=dict)
+async def login_for_access_token():
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": "data_access"}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/", response_model=List[dict])
 async def get_data(response: Response, token: str = Depends(get_current_token)):
