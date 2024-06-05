@@ -63,7 +63,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 async def get_current_token(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="驗證失敗，無法取得Token",
+        detail="Token驗證失敗",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
