@@ -44,7 +44,7 @@ class User(BaseModel):
 SECRET_KEY = os.getenv("SECRET_KEY")
 print(SECRET_KEY)
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1  # 設置Token在2分鐘後過期
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 設置Token在2分鐘後過期
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -91,20 +91,32 @@ async def login_for_access_token(user: User):
     print('password=',user.password)
 
     query = """
-        SELECT * from USER WHERE id = ? AND password = ?
+        SELECT * from STUDENT WHERE id = ? AND password = ?
     """
     res = queryDB(query, (user.id,user.password))
     # print('password=',user.password)
     print('user data: ',res)
     
     if not res:
-        raise auth_exception
+        query = """
+            SELECT * from STAFF WHERE id = ? AND password = ?
+        """
+        res2 = queryDB(query, (user.id,user.password))
+
+        if not res2:    
+            raise auth_exception
+        else:
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"sub": "data_access"}, expires_delta=access_token_expires
+            )
+            return {"access_token": access_token, "token_type": "bearer", "user_type": "staff", "user_data": res2}
     else:
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": "data_access"}, expires_delta=access_token_expires
         )
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {"access_token": access_token, "token_type": "bearer", "user_type": "student", "user_data": res}
     
 @app.get("/checkToken", response_model=bool)
 async def checkToken(response: Response, token: str = Depends(get_current_token)):
