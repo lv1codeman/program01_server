@@ -59,7 +59,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-# 獲取當前Token
+# 檢查當前Token的合法性
 async def get_current_token(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -106,6 +106,9 @@ async def login_for_access_token(user: User):
         )
         return {"access_token": access_token, "token_type": "bearer"}
     
+@app.get("/checkToken", response_model=bool)
+async def checkToken(response: Response, token: str = Depends(get_current_token)):
+    return True
 
 @app.get("/", response_model=List[dict])
 async def get_data(response: Response, token: str = Depends(get_current_token)):
