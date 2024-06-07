@@ -1,5 +1,7 @@
 from typing import Union, List
 from fastapi import FastAPI, Response, Request, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from ipaddress import IPv4Address, IPv6Address, ip_address
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from fastapi.encoders import jsonable_encoder
@@ -35,9 +37,31 @@ app.add_middleware(
 #         raise HTTPException(status_code=403, detail="IP地址未授权")
 #     return True
 
+current_directory = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=current_directory)
+
 class User(BaseModel):
     id: str
     password: str
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    title = '學程檢查平台server'
+    message = '學程檢查平台Server端'
+    return templates.TemplateResponse("index.html", {"request": request, "title": title, "message": message})
+
+# @app.get("/", response_model=List[dict])
+# async def get_data(response: Response, token: str = Depends(get_current_token)):
+# async def get_data(response: Response, token: str = Depends(get_current_token), ip_check: bool = Depends(check_ip)):
+    # data = selectdb()
+    # json_data = []
+    # for item in data:
+    #     json_item = {"id": item[0], "name": item[1]}
+    #     json_data.append(json_item)
+    # response.headers["Content-Type"] = "application/json; charset=utf-8"
+    # return jsonable_encoder(json_data)
+    return 
+
 
 
 # 獲取環境變量中的 SECRET_KEY
@@ -122,16 +146,7 @@ async def login_for_access_token(user: User):
 async def checkToken(response: Response, token: str = Depends(get_current_token)):
     return True
 
-@app.get("/", response_model=List[dict])
-async def get_data(response: Response, token: str = Depends(get_current_token)):
-# async def get_data(response: Response, token: str = Depends(get_current_token), ip_check: bool = Depends(check_ip)):
-    data = selectdb()
-    json_data = []
-    for item in data:
-        json_item = {"id": item[0], "name": item[1]}
-        json_data.append(json_item)
-    response.headers["Content-Type"] = "application/json; charset=utf-8"
-    return jsonable_encoder(json_data)
+
 
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: Union[str, None] = None, token: str = Depends(get_current_token)):
@@ -154,18 +169,18 @@ def get_program(program_id: int, token: str = Depends(get_current_token)):
     print(res)
     return jsonable_encoder(res)
 
-def selectdb():
-    conn = sqlite3.connect("db.sqlite3")
-    cursor = conn.cursor()
-    query = """
-        SELECT * from category
-    """
-    cursor.execute(query)
-    res = cursor.fetchall()
+# def selectdb():
+#     conn = sqlite3.connect("db.sqlite3")
+#     cursor = conn.cursor()
+#     query = """
+#         SELECT * from category
+#     """
+#     cursor.execute(query)
+#     res = cursor.fetchall()
 
-    conn.commit()
-    conn.close()
-    return res
+#     conn.commit()
+#     conn.close()
+#     return res
 
 def queryDB(query, params=None):
     conn = sqlite3.connect("db.sqlite3")
