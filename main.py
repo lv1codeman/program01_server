@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 import sqlite3
+import pandas as pd
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -162,12 +163,21 @@ def get_program(token: str = Depends(get_current_token)):
 
 @app.get("/program/{program_id}")
 def get_program(program_id: int, token: str = Depends(get_current_token)):
+    conn = sqlite3.connect('your_database.db')
+    
     query = """
-        SELECT * from program WHERE id = ?
+        SELECT * FROM PROGRAMS
+        LEFT JOIN CATEGORY on PROGRAMS.cateID = CATEGORY.cateID
+        LEFT JOIN DOMAIN on CATEGORY.domainID = DOMAIN.domainID
+        WHERE PROGRAMS.program_id = 1
     """
-    res = queryDB(query, (program_id,))
-    print(res)
-    return jsonable_encoder(res)
+    
+    df = pd.read_sql_query(query, conn)
+    json_data = df.to_json(orient='records', force_ascii=False)
+    with open('data.json', 'w', encoding='utf-8') as file:
+    file.write(json_data)
+    print(json_data)
+    return jsonable_encoder(json_data)
 
 # def selectdb():
 #     conn = sqlite3.connect("db.sqlite3")
