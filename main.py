@@ -11,6 +11,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 import sqlite3
 import pandas as pd
+import json
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -162,22 +163,41 @@ def get_program(token: str = Depends(get_current_token)):
     return res
 
 @app.get("/program/{program_id}")
-def get_program(program_id: int, token: str = Depends(get_current_token)):
-    conn = sqlite3.connect('your_database.db')
+def get_program(program_id: int):
+    conn = sqlite3.connect('db2.db')
     
-    query = """
-        SELECT * FROM PROGRAMS
-        LEFT JOIN CATEGORY on PROGRAMS.cateID = CATEGORY.cateID
-        LEFT JOIN DOMAIN on CATEGORY.domainID = DOMAIN.domainID
-        WHERE PROGRAMS.program_id = 1
+    query = f"""
+SELECT 
+    p.program_id AS program_id,
+    p.program_name AS program_name,
+    c.category_id AS category_id,
+    c.category_name AS category_name,
+    COALESCE(d.domain_id, 0) AS domain_id,
+    COALESCE(d.domain_name, '0') AS domain_name,
+    s.subject_id AS subject_id,
+    s.subject_name AS subject_name,
+    s.subject_sub_id AS subject_sub_id,
+	s.subject_sys AS subject_sys,
+	s.subject_unit AS subject_unit,
+	s.subject_eng_name AS subject_eng_name,
+    s.subject_credit AS subject_credit,
+    s.subject_hour AS subject_hour
+FROM 
+    programs p
+    INNER JOIN courses co ON p.program_id = co.program_id
+    INNER JOIN categories c ON co.category_id = c.category_id
+    LEFT JOIN domains d ON co.domain_id = d.domain_id
+    INNER JOIN subjects s ON co.subject_id = s.subject_id
+    where co.program_id = {program_id}
     """
     
     df = pd.read_sql_query(query, conn)
-    json_data = df.to_json(orient='records', force_ascii=False)
-    with open('data.json', 'w', encoding='utf-8') as file:
-    file.write(json_data)
-    print(json_data)
-    return jsonable_encoder(json_data)
+    print(df)
+    json_data = json.loads(df.to_json(orient='records', force_ascii=False))
+    # with open('data.json', 'w', encoding='utf-8') as file:
+    #     file.write(json_data)
+    
+    return json_data
 
 # def selectdb():
 #     conn = sqlite3.connect("db.sqlite3")
