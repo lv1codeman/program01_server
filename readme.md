@@ -10,6 +10,12 @@ pip install fastapi uvicorn python-jose[cryptography] python-dotenv
 
 ## 執行方式
 
+### 經由 debug 模式開啟
+
+已經在.vscode/launch.json 設定好啟動參數，按快捷鍵 F5 即可執行
+
+### 手動輸入指令
+
 開在預設的 PORT
 
 ```
