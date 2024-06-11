@@ -30,14 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ALLOWED_IPS = ['118.163.203.107','202.39.151.187']
-# def check_ip(request: Request):
-#     print('pass check_ip test.')
-#     client_ip = ip_address(request.client.host)
-#     print('your ip is', client_ip)
-#     if client_ip not in [ip_address(ip) for ip in ALLOWED_IPS]:
-#         raise HTTPException(status_code=403, detail="IP地址未授权")
-#     return True
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=current_directory)
@@ -52,29 +44,14 @@ async def read_root(request: Request):
     message = '學程檢查平台Server端'
     return templates.TemplateResponse("index.html", {"request": request, "title": title, "message": message})
 
-# @app.get("/", response_model=List[dict])
-# async def get_data(response: Response, token: str = Depends(get_current_token)):
-# async def get_data(response: Response, token: str = Depends(get_current_token), ip_check: bool = Depends(check_ip)):
-    # data = selectdb()
-    # json_data = []
-    # for item in data:
-    #     json_item = {"id": item[0], "name": item[1]}
-    #     json_data.append(json_item)
-    # response.headers["Content-Type"] = "application/json; charset=utf-8"
-    # return jsonable_encoder(json_data)
-    return 
-
-
 
 # 獲取環境變量中的 SECRET_KEY
 SECRET_KEY = os.getenv("SECRET_KEY")
 print(SECRET_KEY)
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 設置Token在2分鐘後過期
+ACCESS_TOKEN_EXPIRE_MINUTES = 1  # 設置Token在2分鐘後過期
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# 創建Token的函數
+# 創建Token的function
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     if expires_delta:
@@ -85,8 +62,35 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-# 檢查當前Token的合法性
-async def get_current_token(token: str = Depends(oauth2_scheme)):
+# 登入的API接口：接收client端傳來的id, password,回傳token與user data
+@app.post("/login", response_model=dict)
+async def login_for_access_token(user: User):
+    auth_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="錯誤的使用者名稱或密碼",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    print('ID=',user.id)
+    print('password=',user.password)
+
+    query = """
+        SELECT * from members WHERE member_id = ? AND member_password = ?
+    """
+    res = queryDB(query, (user.id,user.password))
+    # print('password=',user.password)
+    print('user data: ',res)
+    
+    if not res:
+        raise auth_exception
+    else:
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": "data_access"}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer", "user_data": res}
+
+# 驗證token合法性的function
+async def verify_token(token: str):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token驗證失敗",
@@ -103,59 +107,30 @@ async def get_current_token(token: str = Depends(oauth2_scheme)):
             )
         if payload.get("sub") != "data_access":
             raise credentials_exception
+        return payload
     except JWTError:
         raise credentials_exception
 
-@app.post("/token", response_model=dict)
-async def login_for_access_token(user: User):
-    auth_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="錯誤的使用者名稱或密碼",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    print('ID=',user.id)
-    print('password=',user.password)
+class TokenData(BaseModel):
+    token: str
 
-    query = """
-        SELECT * from STUDENT WHERE id = ? AND password = ?
-    """
-    res = queryDB(query, (user.id,user.password))
-    # print('password=',user.password)
-    print('user data: ',res)
-    
-    if not res:
-        query = """
-            SELECT * from STAFF WHERE id = ? AND password = ?
-        """
-        res2 = queryDB(query, (user.id,user.password))
-
-        if not res2:    
-            raise auth_exception
-        else:
-            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-            access_token = create_access_token(
-                data={"sub": "data_access"}, expires_delta=access_token_expires
-            )
-            return {"access_token": access_token, "token_type": "bearer", "user_type": "staff", "user_data": res2}
-    else:
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": "data_access"}, expires_delta=access_token_expires
-        )
-        return {"access_token": access_token, "token_type": "bearer", "user_type": "student", "user_data": res}
-    
-@app.get("/checkToken", response_model=bool)
-async def checkToken(response: Response, token: str = Depends(get_current_token)):
-    return True
+# 驗證token合法性的API接口
+@app.post("/checkToken")
+async def checkToken(token_data: TokenData):
+    try:
+        payload = await verify_token(token_data.token)
+        return {"status": "success", "data": payload}
+    except HTTPException as e:
+        return {"status": "error", "detail": e.detail}
 
 
 
 @app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None, token: str = Depends(get_current_token)):
+def read_item(item_id: int, q: Union[str, None] = None):
     return {"item_id": item_id, "q": q}
 
 @app.get("/program/all")
-def get_program(token: str = Depends(get_current_token)):
+def get_program():
     query = """
         SELECT * from program
     """
@@ -213,7 +188,7 @@ FROM
 #     return res
 
 def queryDB(query, params=None):
-    conn = sqlite3.connect("db.sqlite3")
+    conn = sqlite3.connect("./DB/program01.db")
     cursor = conn.cursor()
     if params is not None:
         cursor.execute(query, params)

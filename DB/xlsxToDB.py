@@ -10,13 +10,20 @@ parser.add_argument('--header', type=int, default=0, help='Row number to use as 
 args = parser.parse_args()
 
 # 讀取 Excel 文件，指定 header 行
-df = pd.read_excel(args.excel_file, header=args.header)
+df = pd.read_excel(args.excel_file, header=args.header, dtype=str)
+
+# 指定int的欄位
+# integer_columns = ['id', 'age']
+integer_columns = []
+
+for col in integer_columns:
+    df[col] = df[col].astype(int)
 
 # 連接到 SQLite 資料庫
-conn = sqlite3.connect('db.sqlite3')
+conn = sqlite3.connect('program01.db')
 
 # 將 DataFrame 寫入 SQLite 資料庫的表中
-df.to_sql(args.table_name, conn, if_exists='replace', index=False)
+df.to_sql(args.table_name, conn, if_exists='append', index=False)
 
 # 確保資料已提交
 conn.commit()
