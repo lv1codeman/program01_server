@@ -1,4 +1,5 @@
 from typing import Union, List
+from typing import Annotated
 from fastapi import FastAPI, Response, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -6,7 +7,7 @@ from ipaddress import IPv4Address, IPv6Address, ip_address
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel
 import sqlite3
@@ -34,7 +35,77 @@ app.add_middleware(
 current_directory = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=current_directory)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+fake_users_db = {
+    "johndoe": {
+        "username": "johndoe",
+        "full_name": "John Doe",
+        "email": "johndoe@example.com",
+        "hashed_password": "fakehashedsecret",
+        "disabled": False,
+    },
+    "alice": {
+        "username": "alice",
+        "full_name": "Alice Wonderson",
+        "email": "alice@example.com",
+        "hashed_password": "fakehashedsecret2",
+        "disabled": True,
+    },
+}
+
+def fake_hash_password(password: str):
+    return "fakehashed" + password
+
+class TokenUser(BaseModel):
+    username: str
+    email: Union[str, None] = None
+    full_name: Union[str, None] = None
+    disabled: Union[bool, None] = None
+
+class UserInDB(TokenUser):
+    hashed_password: str
+
+def get_user(db, username: str):
+    if username in db:
+        user_dict = db[username]
+        return UserInDB(**user_dict)
+
+def fake_decode_token(token):
+    return TokenUser(
+        username=token + "fakedecoded", email="john@example.com", full_name="John Doe"
+    )
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    user = fake_decode_token(token)
+    return user
+
+async def get_current_active_user(current_user: TokenUser = Depends(get_current_user)):
+    if current_user.disabled:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user
+
+@app.get("/items/")
+async def read_items(token: str = Depends(oauth2_scheme)):
+    return {"token": token}
+
+@app.post("/token")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    print("now in /token")
+    user_dict = fake_users_db.get(form_data.username)
+    if not user_dict:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    user = UserInDB(**user_dict)
+    hashed_password = fake_hash_password(form_data.password)
+    if not hashed_password == user.hashed_password:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    return {"access_token": user.username, "token_type": "bearer"}
+
+@app.get("/users/me")
+async def read_users_me(current_user: TokenUser = Depends(get_current_user)):
+    return current_user
+
+
 class User(BaseModel):
     id: str
     password: str
@@ -66,6 +137,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 # 登入的API接口：接收client端傳來的id, password,回傳token與user data
 @app.post("/login", response_model=dict)
 async def login_for_access_token(user: User):
+    
     print('---/login START---')
     auth_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -76,7 +148,7 @@ async def login_for_access_token(user: User):
     print('password=',user.password)
 
     query = """
-        SELECT * from members WHERE member_id = ? AND member_password = ?
+        SELECT * from members WHERE member_account = ? AND member_password = ?
     """
     res = queryDB(query, (user.id,user.password))
     # print('password=',user.password)
@@ -139,6 +211,14 @@ def get_program(token: str = Depends(oauth2_scheme)):
     res = queryDB(query)
     return res
 
+@app.get("/fakeprogram/all")
+def get_program(token: str = Depends(oauth2_scheme)):
+    query = """
+        SELECT * from fakeprogram
+    """
+    res = queryDB(query)
+    return res
+
 @app.get("/program/{program_id}")
 def get_program(program_id: int):
     conn = sqlite3.connect('db2.db')
@@ -175,19 +255,6 @@ FROM
     #     file.write(json_data)
     
     return json_data
-
-# def selectdb():
-#     conn = sqlite3.connect("db.sqlite3")
-#     cursor = conn.cursor()
-#     query = """
-#         SELECT * from category
-#     """
-#     cursor.execute(query)
-#     res = cursor.fetchall()
-
-#     conn.commit()
-#     conn.close()
-#     return res
 
 def queryDB(query, params=None):
     conn = sqlite3.connect("./DB/program01.db")
