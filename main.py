@@ -14,6 +14,10 @@ import sqlite3
 import pandas as pd
 import json
 import os
+from Crypto.Cipher import AES, DES
+from binascii import b2a_hex, a2b_hex
+import hashlib
+import base64
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -44,13 +48,34 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # 獲取環境變量中的 SECRET_KEY
 SECRET_KEY = os.getenv("SECRET_KEY")
-print(SECRET_KEY)
+SECRET_AES_KEY = os.getenv("SECRET_AES_KEY")
+print('SECRET_KEY = ', SECRET_KEY)
+print('SECRET_AES_KEY = ', SECRET_AES_KEY)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1  # 設置Token在2分鐘後過期
 
 class User(BaseModel):
     id: str
     password: str
+
+def pad_key(key):
+    # 确保密钥长度为32字节
+    return key.ljust(32)[:32]
+
+def decrypt_data(encrypted_data, key):
+    try:
+        key = pad_key(key).encode('utf-8')
+        encrypted_data = base64.b64decode(encrypted_data)
+        cipher = AES.new(key, AES.MODE_ECB)
+        decrypted_data = cipher.decrypt(encrypted_data)
+        # 解密后需要移除填充
+        decrypted_data = decrypted_data.rstrip(b'\x10')  # 或者根据实际填充方式进行调整
+        # 将解密后的数据转为字符串（注意编码）
+        decrypted_data_str = decrypted_data.decode('utf-8')
+        return decrypted_data_str
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"解密失败: {str(e)}")
+
 
 # SERVER端根目錄
 @app.get("/", response_class=HTMLResponse)
@@ -79,12 +104,14 @@ async def login_for_access_token(user: User):
         headers={"WWW-Authenticate": "Bearer"},
     )
     print('ID=',user.id)
-    print('password=',user.password)
+    print('未解密前的密碼：', user.password)
+    decrypted_data = decrypt_data(user.password, SECRET_AES_KEY)
+    print('password=',decrypted_data)
 
     query = """
         SELECT * from members WHERE member_account = ? AND member_password = ?
     """
-    res = queryDB(query, (user.id,user.password))
+    res = queryDB(query, (user.id,decrypted_data))
     # print('password=',user.password)
     print('user data: ',res)
     
