@@ -41,3 +41,11 @@ python -m venv env
 ```
 env\Scripts\activate
 ```
+
+## 匯入資料庫
+
+切換到 DB 目錄後輸入以下指令
+
+```
+.\importALL.bat
+```

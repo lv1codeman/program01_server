@@ -34,6 +34,7 @@ app.add_middleware(
 current_directory = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=current_directory)
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 class User(BaseModel):
     id: str
     password: str
@@ -65,6 +66,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 # 登入的API接口：接收client端傳來的id, password,回傳token與user data
 @app.post("/login", response_model=dict)
 async def login_for_access_token(user: User):
+    print('---/login START---')
     auth_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="錯誤的使用者名稱或密碼",
@@ -90,7 +92,7 @@ async def login_for_access_token(user: User):
         return {"access_token": access_token, "token_type": "bearer", "user_data": res}
 
 # 驗證token合法性的function
-async def verify_token(token: str):
+async def verify_token(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token驗證失敗",
@@ -130,9 +132,9 @@ def read_item(item_id: int, q: Union[str, None] = None):
     return {"item_id": item_id, "q": q}
 
 @app.get("/program/all")
-def get_program():
+def get_program(token: str = Depends(oauth2_scheme)):
     query = """
-        SELECT * from program
+        SELECT * from programs
     """
     res = queryDB(query)
     return res
