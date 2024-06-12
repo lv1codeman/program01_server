@@ -17,6 +17,11 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
+def get_current_time():
+    current_time = datetime.now()
+    formatted_time = current_time.strftime("[%Y-%m-%d %H:%M:%S] ")
+    return formatted_time
+
 # 加載 .env 文件中的環境變量
 load_dotenv()
 
@@ -37,91 +42,22 @@ templates = Jinja2Templates(directory=current_directory)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-fake_users_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
-        "hashed_password": "fakehashedsecret",
-        "disabled": False,
-    },
-    "alice": {
-        "username": "alice",
-        "full_name": "Alice Wonderson",
-        "email": "alice@example.com",
-        "hashed_password": "fakehashedsecret2",
-        "disabled": True,
-    },
-}
-
-def fake_hash_password(password: str):
-    return "fakehashed" + password
-
-class TokenUser(BaseModel):
-    username: str
-    email: Union[str, None] = None
-    full_name: Union[str, None] = None
-    disabled: Union[bool, None] = None
-
-class UserInDB(TokenUser):
-    hashed_password: str
-
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
-
-def fake_decode_token(token):
-    return TokenUser(
-        username=token + "fakedecoded", email="john@example.com", full_name="John Doe"
-    )
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    user = fake_decode_token(token)
-    return user
-
-async def get_current_active_user(current_user: TokenUser = Depends(get_current_user)):
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
-
-@app.get("/items/")
-async def read_items(token: str = Depends(oauth2_scheme)):
-    return {"token": token}
-
-@app.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    print("now in /token")
-    user_dict = fake_users_db.get(form_data.username)
-    if not user_dict:
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
-    user = UserInDB(**user_dict)
-    hashed_password = fake_hash_password(form_data.password)
-    if not hashed_password == user.hashed_password:
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
-
-    return {"access_token": user.username, "token_type": "bearer"}
-
-@app.get("/users/me")
-async def read_users_me(current_user: TokenUser = Depends(get_current_user)):
-    return current_user
-
-
-class User(BaseModel):
-    id: str
-    password: str
-
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    title = '學程檢查平台server'
-    message = '學程檢查平台Server端'
-    return templates.TemplateResponse("index.html", {"request": request, "title": title, "message": message})
-
-
 # 獲取環境變量中的 SECRET_KEY
 SECRET_KEY = os.getenv("SECRET_KEY")
 print(SECRET_KEY)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1  # 設置Token在2分鐘後過期
+
+class User(BaseModel):
+    id: str
+    password: str
+
+# SERVER端根目錄
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    title = '學程檢查平台server'
+    message = '學程檢查平台Server端'
+    return templates.TemplateResponse("index.html", {"request": request, "title": title, "message": message})
 
 # 創建Token的function
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -137,8 +73,6 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 # 登入的API接口：接收client端傳來的id, password,回傳token與user data
 @app.post("/login", response_model=dict)
 async def login_for_access_token(user: User):
-    
-    print('---/login START---')
     auth_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="錯誤的使用者名稱或密碼",
@@ -165,6 +99,15 @@ async def login_for_access_token(user: User):
 
 # 驗證token合法性的function
 async def verify_token(token: str = Depends(oauth2_scheme)):
+    """
+    藉由Depends(oauth2_scheme)，從header中提取Authorization
+    Authorization: 'Bearer token_string'
+    並驗證token_string是否合法
+    若不合法回傳401 Unauthorized訊息
+    """
+    timestamp = get_current_time()
+    print(f'{timestamp} token: {token}')
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token驗證失敗",
@@ -191,20 +134,27 @@ class TokenData(BaseModel):
 # 驗證token合法性的API接口
 @app.post("/checkToken")
 async def checkToken(token_data: TokenData):
+    """
+    使用client端傳來的token資料進行verify_token
+    ## verify_token:
+    -   藉由Depends(oauth2_scheme)，從header中提取Authorization
+    >   Authorization: 'Bearer token_string'  
+    -   驗證token_string是否合法  
+    -   若不合法回傳401 Unauthorized訊息
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token驗證失敗",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = await verify_token(token_data.token)
         return {"status": "success", "data": payload}
     except HTTPException as e:
-        return {"status": "error", "detail": e.detail}
-
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+        raise credentials_exception
 
 @app.get("/program/all")
-def get_program(token: str = Depends(oauth2_scheme)):
+def get_program(token: dict = Depends(verify_token)):
     query = """
         SELECT * from programs
     """
@@ -212,49 +162,18 @@ def get_program(token: str = Depends(oauth2_scheme)):
     return res
 
 @app.get("/fakeprogram/all")
-def get_program(token: str = Depends(oauth2_scheme)):
+def get_fakeprogram_all():
+    """
+    獲取假資料，沒有做token驗證  
+    Returns:
+    - 各學程資料
+    """
+
     query = """
         SELECT * from fakeprogram
     """
     res = queryDB(query)
     return res
-
-@app.get("/program/{program_id}")
-def get_program(program_id: int):
-    conn = sqlite3.connect('db2.db')
-    
-    query = f"""
-SELECT 
-    p.program_id AS program_id,
-    p.program_name AS program_name,
-    c.category_id AS category_id,
-    c.category_name AS category_name,
-    COALESCE(d.domain_id, 0) AS domain_id,
-    COALESCE(d.domain_name, '0') AS domain_name,
-    s.subject_id AS subject_id,
-    s.subject_name AS subject_name,
-    s.subject_sub_id AS subject_sub_id,
-	s.subject_sys AS subject_sys,
-	s.subject_unit AS subject_unit,
-	s.subject_eng_name AS subject_eng_name,
-    s.subject_credit AS subject_credit,
-    s.subject_hour AS subject_hour
-FROM 
-    programs p
-    INNER JOIN courses co ON p.program_id = co.program_id
-    INNER JOIN categories c ON co.category_id = c.category_id
-    LEFT JOIN domains d ON co.domain_id = d.domain_id
-    INNER JOIN subjects s ON co.subject_id = s.subject_id
-    where co.program_id = {program_id}
-    """
-    
-    df = pd.read_sql_query(query, conn)
-    print(df)
-    json_data = json.loads(df.to_json(orient='records', force_ascii=False))
-    # with open('data.json', 'w', encoding='utf-8') as file:
-    #     file.write(json_data)
-    
-    return json_data
 
 def queryDB(query, params=None):
     conn = sqlite3.connect("./DB/program01.db")
