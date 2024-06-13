@@ -49,34 +49,36 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # 獲取環境變量中的 SECRET_KEY
 SECRET_KEY = os.getenv("SECRET_KEY")
 SECRET_AES_KEY = os.getenv("SECRET_AES_KEY")
-print('SECRET_KEY = ', SECRET_KEY)
-print('SECRET_AES_KEY = ', SECRET_AES_KEY)
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1  # 設置Token在2分鐘後過期
+ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 設置Token在2分鐘後過期
 
 class User(BaseModel):
     id: str
     password: str
 
 def pad(data):
-    # Zero padding to ensure the length of data is multiple of 16
+    # Zero Padding to ensure data length is a multiple of 16 bytes
     while len(data) % 16 != 0:
         data += '\x00'
     return data
 
+# AES解密
 def decrypt_aes(encrypted_data, key):
-    # 解析密钥
     key = key.encode('utf-8')
-    # 解码base64密文
     encrypted_data = base64.b64decode(encrypted_data)
-    # 创建AES解密器
     cipher = AES.new(key, AES.MODE_ECB)
-    # 解密
     decrypted_data = cipher.decrypt(encrypted_data)
-    # 移除填充
     decrypted_data = decrypted_data.rstrip(b'\x00')
     return decrypted_data.decode('utf-8')
 
+# AES加密
+def encrypt_aes(data, key):
+    key = key.encode('utf-8')
+    padded_data = pad(data)
+    cipher = AES.new(key, AES.MODE_ECB)
+    encrypted_data = cipher.encrypt(padded_data.encode('utf-8'))
+    encrypted_data_base64 = base64.b64encode(encrypted_data).decode('utf-8')
+    return encrypted_data_base64
 
 # SERVER端根目錄
 @app.get("/", response_class=HTMLResponse)
@@ -104,16 +106,12 @@ async def login_for_access_token(user: User):
         detail="錯誤的使用者名稱或密碼",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    print('ID=',user.id)
-    print('未解密前的密碼：', user.password)
+    # 將密碼解密(可以一直加密，但加密2次就要解密2次，每次加密/解密的結果是固定的)
     decrypted_data = decrypt_aes(user.password, SECRET_AES_KEY)
-    print('password=',decrypted_data)
-
     query = """
         SELECT * from members WHERE member_account = ? AND member_password = ?
     """
-    res = queryDB(query, (user.id,decrypted_data))
-    # print('password=',user.password)
+    res = queryDB(query, (user.id, decrypted_data))
     print('user data: ',res)
     
     if not res:
@@ -184,7 +182,7 @@ async def checkToken(token_data: TokenData):
 @app.get("/program/all")
 def get_program(token: dict = Depends(verify_token)):
     query = """
-        SELECT * from programs
+        SELECT * from programs where id = ? and password = ?
     """
     res = queryDB(query)
     return res
@@ -199,6 +197,14 @@ def get_fakeprogram_all():
 
     query = """
         SELECT * from fakeprogram
+    """
+    res = queryDB(query)
+    return res
+
+@app.get("/subject/all")
+def get_subject_all():
+    query = """
+        SELECT * from subjects
     """
     res = queryDB(query)
     return res
