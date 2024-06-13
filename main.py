@@ -58,23 +58,24 @@ class User(BaseModel):
     id: str
     password: str
 
-def pad_key(key):
-    # 确保密钥长度为32字节
-    return key.ljust(32)[:32]
+def pad(data):
+    # Zero padding to ensure the length of data is multiple of 16
+    while len(data) % 16 != 0:
+        data += '\x00'
+    return data
 
-def decrypt_data(encrypted_data, key):
-    try:
-        key = pad_key(key).encode('utf-8')
-        encrypted_data = base64.b64decode(encrypted_data)
-        cipher = AES.new(key, AES.MODE_ECB)
-        decrypted_data = cipher.decrypt(encrypted_data)
-        # 解密后需要移除填充
-        decrypted_data = decrypted_data.rstrip(b'\x10')  # 或者根据实际填充方式进行调整
-        # 将解密后的数据转为字符串（注意编码）
-        decrypted_data_str = decrypted_data.decode('utf-8')
-        return decrypted_data_str
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"解密失败: {str(e)}")
+def decrypt_aes(encrypted_data, key):
+    # 解析密钥
+    key = key.encode('utf-8')
+    # 解码base64密文
+    encrypted_data = base64.b64decode(encrypted_data)
+    # 创建AES解密器
+    cipher = AES.new(key, AES.MODE_ECB)
+    # 解密
+    decrypted_data = cipher.decrypt(encrypted_data)
+    # 移除填充
+    decrypted_data = decrypted_data.rstrip(b'\x00')
+    return decrypted_data.decode('utf-8')
 
 
 # SERVER端根目錄
@@ -105,7 +106,7 @@ async def login_for_access_token(user: User):
     )
     print('ID=',user.id)
     print('未解密前的密碼：', user.password)
-    decrypted_data = decrypt_data(user.password, SECRET_AES_KEY)
+    decrypted_data = decrypt_aes(user.password, SECRET_AES_KEY)
     print('password=',decrypted_data)
 
     query = """
