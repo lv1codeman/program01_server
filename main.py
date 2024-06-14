@@ -20,6 +20,7 @@ import hashlib
 import base64
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+import itertools
 
 def get_current_time():
     current_time = datetime.now()
@@ -220,22 +221,55 @@ class Program(BaseModel):
 @app.post("/program/submit")
 async def submit_program(programJSON: Program, token: dict = Depends(verify_token)):
     print(programJSON)
+    ps_list = []
     try:
         print(f"Program Name: {programJSON.program_name}")
         # 印出類別資訊
+        ps_id_count = 0
+        p_id_count=0
+        c_id_count=0
+        d_id_count=0
         if programJSON.category:
+            ps_id_count +=1
+            ps_dict = {'program_struct_id': ps_id_count}
+            p_id_count +=1
+            ps_dict = {'program_id': p_id_count}
             for category in programJSON.category:
                 print("\nCategory:")
                 print(f"  Category ID: {category.category_id}")
                 print(f"  Category Name: {category.category_name}")
+                c_id_count+=1
+                ps_dict['category_id'] = c_id_count
+                if category.course:
+                    print(f"  Course:")
+                    for course in category.course:
+                        # 有類別沒領域
+                        ps_dict['domain_id'] = 0
+                        ps_dict['subject_sub_id'] = course.subject_sub_id
+                        ps_list.append(ps_dict)
 
+                        print(f"    Subject ID: {course.subject_id}")
+                        print(f"    Subject Unit: {course.subject_unit}")
+                        print(f"    Subject Sub ID: {course.subject_sub_id}")
+                        print(f"    Subject Sys: {course.subject_sys}")
+                        print(f"    Subject Name: {course.subject_name}")
+                        print(f"    Subject Eng Name: {course.subject_eng_name}")
+                        print(f"    Subject Credit: {course.subject_credit}")
+                        print(f"    Subject Hour: {course.subject_hour}")
+                        print("\n")
                 # 檢查 domain 是否有內容
-                if category.domain:
+                elif category.domain:
+                    # 有類別有領域
                     for domain in category.domain:
                         print("  Domain:")
+                        print(f"    Domain id: {domain.domain_id}")
                         print(f"    Domain Name: {domain.domain_name}")
+                        d_id_count+=1
+                        ps_dict['domain_id'] = d_id_count
                         if domain.course:
                             for course in domain.course:
+                                ps_dict['subject_sub_id'] = course.subject_sub_id
+                                ps_list.append(ps_dict)
                                 print(f"    Course:")
                                 print(f"      Subject ID: {course.subject_id}")
                                 print(f"      Subject Unit: {course.subject_unit}")
@@ -245,6 +279,10 @@ async def submit_program(programJSON: Program, token: dict = Depends(verify_toke
                                 print(f"      Subject Eng Name: {course.subject_eng_name}")
                                 print(f"      Subject Credit: {course.subject_credit}")
                                 print(f"      Subject Hour: {course.subject_hour}")
+                
+            
+        print('\n')
+        print(ps_list)
 
         return True
     except Exception as e:
