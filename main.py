@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import Union, List, Optional
 from typing import Annotated
 from fastapi import FastAPI, Response, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -123,6 +123,10 @@ async def login_for_access_token(user: User):
         )
         return {"access_token": access_token, "token_type": "bearer", "user_data": res}
 
+# 定义接收的JSON数据模型
+
+
+
 # 驗證token合法性的function
 async def verify_token(token: str = Depends(oauth2_scheme)):
     """
@@ -178,6 +182,75 @@ async def checkToken(token_data: TokenData):
         return {"status": "success", "data": payload}
     except HTTPException as e:
         raise credentials_exception
+
+
+class Course(BaseModel):
+    subject_id: Optional[int] = None
+    subject_unit: Optional[str] = None
+    subject_sub_id: Optional[str] = None
+    subject_sys: Optional[str] = None
+    subject_name: Optional[str] = None
+    subject_eng_name: Optional[str] = None
+    subject_credit: Optional[int] = None
+    subject_hour: Optional[int] = None
+
+class Domain(BaseModel):
+    domain_id: Optional[int] = None
+    domain_name: Optional[str] = None
+    course: Optional[List[Course]] = None
+
+class Category(BaseModel):
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    category_minCredit: Optional[int] = None
+    category_requireNum: Optional[int] = None
+    domain: Optional[List[Domain]] = None
+    course: Optional[List[Course]] = None
+
+class Program(BaseModel):
+    program_name: Optional[str] = None
+    program_url: Optional[str] = None
+    program_type: Optional[str] = None
+    program_unit: Optional[str] = None
+    program_minCredit: Optional[int] = None
+    program_nonSelfCredit: Optional[int] = None
+    program_criteria: Optional[str] = None
+    category: Optional[List[Category]] = None
+
+@app.post("/program/submit")
+async def submit_program(programJSON: Program, token: dict = Depends(verify_token)):
+    print(programJSON)
+    try:
+        print(f"Program Name: {programJSON.program_name}")
+        # 印出類別資訊
+        if programJSON.category:
+            for category in programJSON.category:
+                print("\nCategory:")
+                print(f"  Category ID: {category.category_id}")
+                print(f"  Category Name: {category.category_name}")
+
+                # 檢查 domain 是否有內容
+                if category.domain:
+                    for domain in category.domain:
+                        print("  Domain:")
+                        print(f"    Domain Name: {domain.domain_name}")
+                        if domain.course:
+                            for course in domain.course:
+                                print(f"    Course:")
+                                print(f"      Subject ID: {course.subject_id}")
+                                print(f"      Subject Unit: {course.subject_unit}")
+                                print(f"      Subject Sub ID: {course.subject_sub_id}")
+                                print(f"      Subject Sys: {course.subject_sys}")
+                                print(f"      Subject Name: {course.subject_name}")
+                                print(f"      Subject Eng Name: {course.subject_eng_name}")
+                                print(f"      Subject Credit: {course.subject_credit}")
+                                print(f"      Subject Hour: {course.subject_hour}")
+
+        return True
+    except Exception as e:
+        # 如果出现异常，返回False
+        print(e)
+        return False
 
 @app.get("/program/all")
 def get_program(token: dict = Depends(verify_token)):
