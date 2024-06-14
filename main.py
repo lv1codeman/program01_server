@@ -225,16 +225,24 @@ def parse_json(program: Program):
     result = []
     # 找出DB中program_structure_id、program_id、category_id、domain_id的最大值
     query = """
-        SELECT MAX(program_structure_id) as res from program_structure
+        SELECT 
+            MAX(program_structure_id) as program_structure_id_max,
+            MAX(program_id) as program_id_max,
+            MAX(category_id) as category_id_max,
+            MAX(domain_id) as domain_id_max
+        from program_structure
     """
-    print('MAX(program_structure_id) = ', queryDB(query)[0]['res'])
-    program_struct_id = queryDB(query)[0]['res'] + 1
+    print('MAX(program_structure_id) = ', queryDB(query)[0]['program_structure_id_max'])
+    program_struct_id = queryDB(query)[0]['program_structure_id_max'] + 1
+    program_id = queryDB(query)[0]['program_id_max'] + 1
+    category_id = queryDB(query)[0]['category_id_max']
+    domain_id = queryDB(query)[0]['domain_id_max']
 
-    query = """
-        SELECT MAX(program_id) as res from programs
-    """
-    print('MAX(program_id) = ', queryDB(query)[0]['res'])
-    program_id = queryDB(query)[0]['res'] + 1
+    # query = """
+    #     SELECT MAX(program_id) as res from programs
+    # """
+    # print('MAX(program_id) = ', queryDB(query)[0]['res'])
+    # program_id = queryDB(query)[0]['res'] + 1
 
     query = """
             INSERT INTO programs (program_id, program_name)
@@ -242,23 +250,23 @@ def parse_json(program: Program):
         """
     params = (program_id, program.program_name)
     insertDB(query, params)
-    # 找出目前categories中category_id的最大值
-    query = """
-        SELECT MAX(category_id) as res from categories
-    """
-    print('MAX(category_id) = ', queryDB(query)[0]['res'])
-    category_id = queryDB(query)[0]['res']
-    # 找出目前domains中domain_id的最大值
-    query = """
-        SELECT MAX(domain_id) as res from domains
-    """
-    print('MAX(domain_id) = ', queryDB(query)[0]['res'])
-    domain_id = queryDB(query)[0]['res']
+    # # 找出目前categories中category_id的最大值
+    # query = """
+    #     SELECT MAX(category_id) as res from categories
+    # """
+    # print('MAX(category_id) = ', queryDB(query)[0]['res'])
+    # category_id = queryDB(query)[0]['res']
+    # # 找出目前domains中domain_id的最大值
+    # query = """
+    #     SELECT MAX(domain_id) as res from domains
+    # """
+    # print('MAX(domain_id) = ', queryDB(query)[0]['res'])
+    # domain_id = queryDB(query)[0]['res']
 
     print('data preloaded success...')
 
     for category in program.category:
-        category_id += category.category_id
+        category_id += 1
         print('category.category_id = ',category.category_id)
         print('category_id = ',category_id)
         query = """
@@ -278,11 +286,11 @@ def parse_json(program: Program):
                     'domain_id': 0,
                     'subject_sub_id': course.subject_sub_id
                 })
-                # program_struct_id += 1
+                program_struct_id += 1
         elif category.domain:
             # print(f"Category {category_id} has domains")
             for domain in category.domain:
-                domain_id += domain.domain_id
+                domain_id += 1
                 query = """
                     INSERT INTO domains (domain_id, domain_name)
                     VALUES (?, ?)
@@ -297,7 +305,7 @@ def parse_json(program: Program):
                         'domain_id': domain_id,
                         'subject_sub_id': course.subject_sub_id
                     })
-                    # program_struct_id += 1
+                    program_struct_id += 1
         else:
             # 不存在沒有類別又沒有領域
             # print(f"Category {category_id} has neither courses nor domains")
@@ -308,7 +316,7 @@ def parse_json(program: Program):
                 'domain_id': 0,
                 'subject_sub_id': ''  # 或者设置为 None，根据需求调整
             })
-            # program_struct_id += 1
+            program_struct_id += 1
 
     print("Finished parsing JSON data")
     return result
