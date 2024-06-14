@@ -186,109 +186,103 @@ async def checkToken(token_data: TokenData):
 
 
 class Course(BaseModel):
-    subject_id: Optional[int] = None
-    subject_unit: Optional[str] = None
-    subject_sub_id: Optional[str] = None
-    subject_sys: Optional[str] = None
-    subject_name: Optional[str] = None
-    subject_eng_name: Optional[str] = None
-    subject_credit: Optional[int] = None
-    subject_hour: Optional[int] = None
+    subject_id: int
+    subject_unit: str
+    subject_sub_id: str
+    subject_sys: str
+    subject_name: str
+    subject_eng_name: str
+    subject_credit: int
+    subject_hour: int
 
 class Domain(BaseModel):
-    domain_id: Optional[int] = None
-    domain_name: Optional[str] = None
-    course: Optional[List[Course]] = None
+    domain_id: int
+    domain_name: str
+    domain_minCredit: int
+    domain_requireNum: int
+    course: List[Course]
 
 class Category(BaseModel):
-    category_id: Optional[int] = None
-    category_name: Optional[str] = None
-    category_minCredit: Optional[int] = None
-    category_requireNum: Optional[int] = None
-    domain: Optional[List[Domain]] = None
-    course: Optional[List[Course]] = None
+    category_id: int
+    category_name: str
+    category_minCredit: int
+    category_requireNum: int
+    domain: List[Domain] = []
+    course: List[Course] = []
 
 class Program(BaseModel):
-    program_name: Optional[str] = None
-    program_url: Optional[str] = None
-    program_type: Optional[str] = None
-    program_unit: Optional[str] = None
-    program_minCredit: Optional[int] = None
-    program_nonSelfCredit: Optional[int] = None
-    program_criteria: Optional[str] = None
-    category: Optional[List[Category]] = None
+    program_name: str
+    program_url: str
+    program_type: str
+    program_unit: str
+    program_minCredit: int
+    program_nonSelfCredit: int
+    program_criteria: str
+    category: List[Category]
+
+def parse_json(data: Program, program_id: int):
+    print("Parsing JSON data...")
+    result = []
+    program_struct_id = 1
+
+    for category in data.category:
+        category_id = category.category_id
+        if category.course:
+            print(f"Category {category_id} has courses")
+            for course in category.course:
+                result.append({
+                    'program_struct_id': program_struct_id,
+                    'program_id': program_id,
+                    'category_id': category_id,
+                    'domain_id': 0,
+                    'subject_sub_id': course.subject_sub_id
+                })
+                program_struct_id += 1
+        elif category.domain:
+            print(f"Category {category_id} has domains")
+            for domain in category.domain:
+                domain_id = domain.domain_id
+                for course in domain.course:
+                    result.append({
+                        'program_struct_id': program_struct_id,
+                        'program_id': program_id,
+                        'category_id': category_id,
+                        'domain_id': domain_id,
+                        'subject_sub_id': course.subject_sub_id
+                    })
+                    program_struct_id += 1
+        else:
+            print(f"Category {category_id} has neither courses nor domains")
+            result.append({
+                'program_struct_id': program_struct_id,
+                'program_id': program_id,
+                'category_id': category_id,
+                'domain_id': 0,
+                'subject_sub_id': ''  # 或者设置为 None，根据需求调整
+            })
+            program_struct_id += 1
+
+    print("Finished parsing JSON data")
+    return result
 
 @app.post("/program/submit")
-async def submit_program(programJSON: Program, token: dict = Depends(verify_token)):
-    print(programJSON)
-    ps_list = []
+async def submit_program(data: Program):
+    program_id = 1  # 你可以根据需要设置 program_id
     try:
-        print(f"Program Name: {programJSON.program_name}")
-        # 印出類別資訊
-        ps_id_count = 0
-        p_id_count=0
-        c_id_count=0
-        d_id_count=0
-        if programJSON.category:
-            ps_id_count +=1
-            ps_dict = {'program_struct_id': ps_id_count}
-            p_id_count +=1
-            ps_dict = {'program_id': p_id_count}
-            for category in programJSON.category:
-                print("\nCategory:")
-                print(f"  Category ID: {category.category_id}")
-                print(f"  Category Name: {category.category_name}")
-                c_id_count+=1
-                ps_dict['category_id'] = c_id_count
-                if category.course:
-                    print(f"  Course:")
-                    for course in category.course:
-                        # 有類別沒領域
-                        ps_dict['domain_id'] = 0
-                        ps_dict['subject_sub_id'] = course.subject_sub_id
-                        ps_list.append(ps_dict)
-
-                        print(f"    Subject ID: {course.subject_id}")
-                        print(f"    Subject Unit: {course.subject_unit}")
-                        print(f"    Subject Sub ID: {course.subject_sub_id}")
-                        print(f"    Subject Sys: {course.subject_sys}")
-                        print(f"    Subject Name: {course.subject_name}")
-                        print(f"    Subject Eng Name: {course.subject_eng_name}")
-                        print(f"    Subject Credit: {course.subject_credit}")
-                        print(f"    Subject Hour: {course.subject_hour}")
-                        print("\n")
-                # 檢查 domain 是否有內容
-                elif category.domain:
-                    # 有類別有領域
-                    for domain in category.domain:
-                        print("  Domain:")
-                        print(f"    Domain id: {domain.domain_id}")
-                        print(f"    Domain Name: {domain.domain_name}")
-                        d_id_count+=1
-                        ps_dict['domain_id'] = d_id_count
-                        if domain.course:
-                            for course in domain.course:
-                                ps_dict['subject_sub_id'] = course.subject_sub_id
-                                ps_list.append(ps_dict)
-                                print(f"    Course:")
-                                print(f"      Subject ID: {course.subject_id}")
-                                print(f"      Subject Unit: {course.subject_unit}")
-                                print(f"      Subject Sub ID: {course.subject_sub_id}")
-                                print(f"      Subject Sys: {course.subject_sys}")
-                                print(f"      Subject Name: {course.subject_name}")
-                                print(f"      Subject Eng Name: {course.subject_eng_name}")
-                                print(f"      Subject Credit: {course.subject_credit}")
-                                print(f"      Subject Hour: {course.subject_hour}")
-                
-            
-        print('\n')
-        print(ps_list)
-
-        return True
+        parsed_data = parse_json(data, program_id)
+        if not parsed_data:
+            raise HTTPException(status_code=400, detail="Parsed data is empty")
+        print('parsed_data=',parsed_data)
+        for item in parsed_data:
+            query = """
+            INSERT INTO program_structure (category_id, domain_id, program_id, program_structure_id, subject_sub_id)
+            VALUES (?, ?, ?, ?, ?)
+            """
+            params = (item['category_id'], item['domain_id'], item['program_id'], item['program_struct_id'], item['subject_sub_id'])
+            insertDB(query, params)
+        return {"message": "Data inserted successfully"}
     except Exception as e:
-        # 如果出现异常，返回False
-        print(e)
-        return False
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/program/all")
 def get_program(token: dict = Depends(verify_token)):
@@ -319,6 +313,23 @@ def get_subject_all():
     """
     res = queryDB(query)
     return res
+
+def insertDB(query, params=None):
+    conn = sqlite3.connect("./DB/program01.db")
+    cursor = conn.cursor()
+    try:
+        if params is not None:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        conn.commit()
+        return True  # 或者返回执行成功的标志
+    except sqlite3.Error as e:
+        print(f"SQLite error executing query: {e}")
+        conn.rollback()
+        return False  # 或者根据需要返回其他错误标志
+    finally:
+        conn.close()
 
 def queryDB(query, params=None):
     conn = sqlite3.connect("./DB/program01.db")
