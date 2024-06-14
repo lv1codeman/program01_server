@@ -233,38 +233,20 @@ def parse_json(program: Program):
         from program_structure
     """
     print('MAX(program_structure_id) = ', queryDB(query)[0]['program_structure_id_max'])
-    program_struct_id = queryDB(query)[0]['program_structure_id_max'] + 1
+    program_structure_id = queryDB(query)[0]['program_structure_id_max'] + 1
     program_id = queryDB(query)[0]['program_id_max'] + 1
     category_id = queryDB(query)[0]['category_id_max']
     domain_id = queryDB(query)[0]['domain_id_max']
-
-    # query = """
-    #     SELECT MAX(program_id) as res from programs
-    # """
-    # print('MAX(program_id) = ', queryDB(query)[0]['res'])
-    # program_id = queryDB(query)[0]['res'] + 1
-
+    # 寫入programs表
     query = """
             INSERT INTO programs (program_id, program_name)
             VALUES (?, ?)
         """
     params = (program_id, program.program_name)
     insertDB(query, params)
-    # # 找出目前categories中category_id的最大值
-    # query = """
-    #     SELECT MAX(category_id) as res from categories
-    # """
-    # print('MAX(category_id) = ', queryDB(query)[0]['res'])
-    # category_id = queryDB(query)[0]['res']
-    # # 找出目前domains中domain_id的最大值
-    # query = """
-    #     SELECT MAX(domain_id) as res from domains
-    # """
-    # print('MAX(domain_id) = ', queryDB(query)[0]['res'])
-    # domain_id = queryDB(query)[0]['res']
 
     print('data preloaded success...')
-
+    # 寫入categories表
     for category in program.category:
         category_id += 1
         print('category.category_id = ',category.category_id)
@@ -280,15 +262,15 @@ def parse_json(program: Program):
             # print(f"Category {category_id} has courses")
             for course in category.course:
                 result.append({
-                    'program_struct_id': program_struct_id,
+                    'program_structure_id': program_structure_id,
                     'program_id': program_id,
                     'category_id': category_id,
                     'domain_id': 0,
                     'subject_sub_id': course.subject_sub_id
                 })
-                program_struct_id += 1
+                program_structure_id += 1
         elif category.domain:
-            # print(f"Category {category_id} has domains")
+            # 寫入domains表
             for domain in category.domain:
                 domain_id += 1
                 query = """
@@ -299,46 +281,59 @@ def parse_json(program: Program):
                 insertDB(query, params)
                 for course in domain.course:
                     result.append({
-                        'program_struct_id': program_struct_id,
+                        'program_structure_id': program_structure_id,
                         'program_id': program_id,
                         'category_id': category_id,
                         'domain_id': domain_id,
                         'subject_sub_id': course.subject_sub_id
                     })
-                    program_struct_id += 1
-        else:
+                    program_structure_id += 1
+        # else:
             # 不存在沒有類別又沒有領域
-            # print(f"Category {category_id} has neither courses nor domains")
-            result.append({
-                'program_struct_id': program_struct_id,
-                'program_id': program_id,
-                'category_id': category_id,
-                'domain_id': 0,
-                'subject_sub_id': ''  # 或者设置为 None，根据需求调整
-            })
-            program_struct_id += 1
 
     print("Finished parsing JSON data")
     return result
 
 @app.post("/program/submit")
 async def submit_program(data: Program):
-    # program_id = 1  # 你可以根据需要设置 program_id
     try:
         parsed_data = parse_json(data)
         if not parsed_data:
             raise HTTPException(status_code=400, detail="Parsed data is empty")
         print('parsed_data=',parsed_data)
+        # 寫入program_structure
         for item in parsed_data:
             query = """
             INSERT INTO program_structure (category_id, domain_id, program_id, program_structure_id, subject_sub_id)
             VALUES (?, ?, ?, ?, ?)
             """
-            params = (item['category_id'], item['domain_id'], item['program_id'], item['program_struct_id'], item['subject_sub_id'])
+            params = (item['category_id'], item['domain_id'], item['program_id'], item['program_structure_id'], item['subject_sub_id'])
             insertDB(query, params)
         return {"message": "Data inserted successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+class UnitName(BaseModel):
+    unit: str
+
+@app.post("/program/select")
+async def select_program(unit: UnitName):
+    print('unit = ',unit.unit)
+    query = """
+        SELECT 
+        *
+        FROM program_structure ps
+        INNER JOIN programs p ON p.program_id = ps.program_id
+        INNER JOIN categories c ON ps.category_id = c.category_id
+        LEFT JOIN domains d ON ps.domain_id = d.domain_id
+        INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
+        where program_unit = ?
+    """
+    params = (unit.unit,)  # 修改成元组形式
+    res = queryDB(query, params)
+    print(res)
+    return {"data": res}
+
 
 @app.get("/program/all")
 def get_program(token: dict = Depends(verify_token)):
