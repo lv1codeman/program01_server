@@ -316,7 +316,7 @@ async def submit_program(data: Program):
 class UnitName(BaseModel):
     unit: str
 
-@app.post("/program/select")
+@app.post("/program/getUnitPrograms")
 async def select_program(unit: UnitName):
     print('unit = ',unit.unit)
     query = """
@@ -334,11 +334,53 @@ async def select_program(unit: UnitName):
     print(res)
     return {"data": res}
 
+class Pdata(BaseModel):
+    unit: str
+    program_id: int
+
+@app.post("/program/getUnitPGById")
+async def select_program(p: Pdata):
+    print('unit = ',p.unit)
+    query = """
+        SELECT 
+        *
+        FROM program_structure ps
+        INNER JOIN programs p ON p.program_id = ps.program_id
+        INNER JOIN categories c ON ps.category_id = c.category_id
+        LEFT JOIN domains d ON ps.domain_id = d.domain_id
+        INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
+        where program_unit = ? and ps.program_id = ?
+    """
+    params = (p.unit,p.program_id)  # 修改成元组形式
+    res = queryDB(query, params)
+    print(res)
+    return {"data": res}
+
+@app.post("/program/getUnitPG")
+async def select_program(unit: UnitName):
+    print('unit = ',unit.unit)
+    query = """
+        SELECT * FROM programs
+        where program_unit = ?
+    """
+    params = (unit.unit,)  # 修改成元组形式
+    res = queryDB(query, params)
+    print(res)
+    return {"data": res}
+
+# request前會先經過token驗證
+# @app.get("/program/all")
+# def get_program(token: dict = Depends(verify_token)):
+#     query = """
+#         SELECT * from programs
+#     """
+#     res = queryDB(query)
+#     return res
 
 @app.get("/program/all")
-def get_program(token: dict = Depends(verify_token)):
+def get_program():
     query = """
-        SELECT * from programs where id = ? and password = ?
+        SELECT * from programs
     """
     res = queryDB(query)
     return res
