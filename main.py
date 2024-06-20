@@ -239,10 +239,10 @@ def parse_json(program: Program):
     domain_id = queryDB(query)[0]['domain_id_max']
     # 寫入programs表
     query = """
-            INSERT INTO programs (program_id, program_name)
-            VALUES (?, ?)
+            INSERT INTO programs (program_id, program_name, program_url, program_unit)
+            VALUES (?, ?, ?, ?)
         """
-    params = (program_id, program.program_name)
+    params = (program_id, program.program_name, program.program_url, program.program_unit)
     insertDB(query, params)
 
     print('data preloaded success...')
@@ -309,6 +309,7 @@ async def submit_program(data: Program):
             """
             params = (item['category_id'], item['domain_id'], item['program_id'], item['program_structure_id'], item['subject_sub_id'])
             insertDB(query, params)
+
         return {"message": "Data inserted successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -357,16 +358,39 @@ async def select_program(p: Pdata):
     return {"data": res}
 
 @app.post("/program/getUnitPG")
-async def select_program(unit: UnitName):
-    print('unit = ',unit.unit)
-    query = """
-        SELECT * FROM programs
-        where program_unit = ?
-    """
-    params = (unit.unit,)  # 修改成元组形式
+async def select_program(input: UnitName):
+    print('unit = ',input.unit)
+    if input.unit == '教務處課務組':
+        query = "SELECT * FROM programs"
+        params = ()
+    else:
+        query = """
+            SELECT * FROM programs
+            where program_unit = ?
+        """
+        params = (input.unit,)  # 修改成元组形式
     res = queryDB(query, params)
     print(res)
     return {"data": res}
+
+class ProgramID(BaseModel):
+    program_id: int
+@app.post("/program/delete_program")
+async def deleteProgram(p: ProgramID):
+    print('program_id = ', p.program_id)
+    queries = [
+        ("DELETE FROM domains WHERE domain_id IN (SELECT DISTINCT domain_id FROM program_structure WHERE program_id = ?);", (p.program_id,)),
+        ("DELETE FROM categories WHERE category_id IN (SELECT DISTINCT category_id FROM program_structure WHERE program_id = ?);", (p.program_id,)),
+        ("DELETE FROM programs WHERE program_id = ?;", (p.program_id,)),
+        ("DELETE FROM program_structure WHERE program_id = ?;", (p.program_id,))
+    ]
+    
+    for query, params in queries:
+        queryDB_nores(query, params)
+    
+    return {"data": "Program and related entries deleted successfully"}
+
+
 
 # request前會先經過token驗證
 # @app.get("/program/all")
@@ -439,3 +463,18 @@ def queryDB(query, params=None):
     conn.close()
     
     return results
+
+def queryDB_nores(query, params=None):
+    conn = sqlite3.connect("./DB/program01.db")
+    cursor = conn.cursor()
+    try:
+        if params is not None:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        conn.commit()
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"An error occurred: {e}")
+    finally:
+        conn.close()
