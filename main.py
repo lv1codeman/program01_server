@@ -239,10 +239,10 @@ def parse_json(program: Program):
     domain_id = queryDB(query)[0]['domain_id_max']
     # 寫入programs表
     query = """
-            INSERT INTO programs (program_id, program_name, program_url, program_unit)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO programs (program_id, program_name, program_url, program_unit, program_type, program_minCredit, program_nonSelfCredit, program_criteria)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-    params = (program_id, program.program_name, program.program_url, program.program_unit)
+    params = (program_id, program.program_name, program.program_url, program.program_unit, program.program_type, program.program_minCredit, program.program_nonSelfCredit, program.program_criteria)
     insertDB(query, params)
 
     print('data preloaded success...')
@@ -252,10 +252,10 @@ def parse_json(program: Program):
         print('category.category_id = ',category.category_id)
         print('category_id = ',category_id)
         query = """
-            INSERT INTO categories (category_id, category_name)
-            VALUES (?, ?)
+            INSERT INTO categories (category_id, category_name, category_minCredit, category_requireNum)
+            VALUES (?, ?, ?, ?)
         """
-        params = (category_id, category.category_name)
+        params = (category_id, category.category_name, category.category_minCredit, category.category_requireNum)
         insertDB(query, params)
         
         if category.course:
@@ -274,10 +274,10 @@ def parse_json(program: Program):
             for domain in category.domain:
                 domain_id += 1
                 query = """
-                    INSERT INTO domains (domain_id, domain_name)
-                    VALUES (?, ?)
+                    INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_requireNum)
+                    VALUES (?, ?, ?, ?)
                 """
-                params = (domain_id, domain.domain_name)
+                params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_requireNum)
                 insertDB(query, params)
                 for course in domain.course:
                     result.append({
