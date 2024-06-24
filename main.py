@@ -141,7 +141,7 @@ async def verify_token(token: str = Depends(oauth2_scheme)):
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token驗證失敗",
+        detail="請先登入(Token驗證失敗)",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
