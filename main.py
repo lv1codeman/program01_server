@@ -235,6 +235,7 @@ def parse_json(program: Program):
     print('MAX(program_structure_id) = ', queryDB(query)[0]['program_structure_id_max'])
     program_structure_id = queryDB(query)[0]['program_structure_id_max'] + 1
     program_id = queryDB(query)[0]['program_id_max'] + 1
+    # 每個program可以有多個category和domain，所以在foreach每個category和domain的時候才對他們的id+1
     category_id = queryDB(query)[0]['category_id_max']
     domain_id = queryDB(query)[0]['domain_id_max']
     # 寫入programs表
