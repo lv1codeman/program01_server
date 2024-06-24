@@ -441,11 +441,11 @@ def insertDB(query, params=None):
         else:
             cursor.execute(query)
         conn.commit()
-        return True  # 或者返回执行成功的标志
+        return True
     except sqlite3.Error as e:
         print(f"SQLite error executing query: {e}")
         conn.rollback()
-        return False  # 或者根据需要返回其他错误标志
+        return False
     finally:
         conn.close()
 
