@@ -211,7 +211,6 @@ class Category(BaseModel):
     course: List[Course] = []
 
 class Program(BaseModel):
-    program_id: str
     program_name: str
     program_url: str
     program_type: str
@@ -235,63 +234,33 @@ def parse_json(program: Program):
     """
     print('MAX(program_structure_id) = ', queryDB(query)[0]['program_structure_id_max'])
     program_structure_id = queryDB(query)[0]['program_structure_id_max'] + 1
-    
+    program_id = queryDB(query)[0]['program_id_max'] + 1
+    # 每個program可以有多個category和domain，所以在foreach每個category和domain的時候才對他們的id+1
     category_id = queryDB(query)[0]['category_id_max']
     domain_id = queryDB(query)[0]['domain_id_max']
-    
-    # 检查program是否存在
-    query = "SELECT program_id FROM programs WHERE program_id = ?"
-    params = (program.program_id,)
-    existing_program = queryDB(query, params)
-    
-    print('check exist: ', existing_program)
-    if existing_program:
-        # 更新programs表
-        query = """
-            UPDATE programs 
-            SET program_name = ?, program_url = ?, program_unit = ?, program_type = ?, program_minCredit = ?, program_nonSelfCredit = ?, program_criteria = ?
-            WHERE program_id = ?
-        """
-        params = (program.program_name, program.program_url, program.program_unit, program.program_type, program.program_minCredit, program.program_nonSelfCredit, program.program_criteria, program.program_id)
-        updateDB(query, params)
-    else:
-        program_id = queryDB(query)[0]['program_id_max'] + 1
-        # 插入programs表
-        query = """
+    # 寫入programs表
+    query = """
             INSERT INTO programs (program_id, program_name, program_url, program_unit, program_type, program_minCredit, program_nonSelfCredit, program_criteria)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = (program_id, program.program_name, program.program_url, program.program_unit, program.program_type, program.program_minCredit, program.program_nonSelfCredit, program.program_criteria)
-        insertDB(query, params)
+    params = (program_id, program.program_name, program.program_url, program.program_unit, program.program_type, program.program_minCredit, program.program_nonSelfCredit, program.program_criteria)
+    insertDB(query, params)
 
     print('data preloaded success...')
-    
-    # 遍历categories并进行插入或更新
+    # 寫入categories表
     for category in program.category:
         category_id += 1
-        query = "SELECT category_id FROM categories WHERE category_id = ?"
-        params = (category_id,)
-        existing_category = queryDB(query, params)
-        
-        if existing_category:
-            # 更新categories表
-            query = """
-                UPDATE categories 
-                SET category_name = ?, category_minCredit = ?, category_requireNum = ?
-                WHERE category_id = ?
-            """
-            params = (category.category_name, category.category_minCredit, category.category_requireNum, category_id)
-            updateDB(query, params)
-        else:
-            # 插入categories表
-            query = """
-                INSERT INTO categories (category_id, category_name, category_minCredit, category_requireNum)
-                VALUES (?, ?, ?, ?)
-            """
-            params = (category_id, category.category_name, category.category_minCredit, category.category_requireNum)
-            insertDB(query, params)
+        print('category.category_id = ',category.category_id)
+        print('category_id = ',category_id)
+        query = """
+            INSERT INTO categories (category_id, category_name, category_minCredit, category_requireNum)
+            VALUES (?, ?, ?, ?)
+        """
+        params = (category_id, category.category_name, category.category_minCredit, category.category_requireNum)
+        insertDB(query, params)
         
         if category.course:
+            # print(f"Category {category_id} has courses")
             for course in category.course:
                 result.append({
                     'program_structure_id': program_structure_id,
@@ -302,30 +271,15 @@ def parse_json(program: Program):
                 })
                 program_structure_id += 1
         elif category.domain:
+            # 寫入domains表
             for domain in category.domain:
                 domain_id += 1
-                query = "SELECT domain_id FROM domains WHERE domain_id = ?"
-                params = (domain_id,)
-                existing_domain = queryDB(query, params)
-                
-                if existing_domain:
-                    # 更新domains表
-                    query = """
-                        UPDATE domains 
-                        SET domain_name = ?, domain_minCredit = ?, domain_requireNum = ?
-                        WHERE domain_id = ?
-                    """
-                    params = (domain.domain_name, domain.domain_minCredit, domain.domain_requireNum, domain_id)
-                    updateDB(query, params)
-                else:
-                    # 插入domains表
-                    query = """
-                        INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_requireNum)
-                        VALUES (?, ?, ?, ?)
-                    """
-                    params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_requireNum)
-                    insertDB(query, params)
-                
+                query = """
+                    INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_requireNum)
+                    VALUES (?, ?, ?, ?)
+                """
+                params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_requireNum)
+                insertDB(query, params)
                 for course in domain.course:
                     result.append({
                         'program_structure_id': program_structure_id,
@@ -335,10 +289,11 @@ def parse_json(program: Program):
                         'subject_sub_id': course.subject_sub_id
                     })
                     program_structure_id += 1
+        # else:
+            # 不存在沒有類別又沒有領域
 
     print("Finished parsing JSON data")
     return result
-
 
 @app.post("/program/submit")
 async def submit_program(data: Program):
@@ -346,36 +301,19 @@ async def submit_program(data: Program):
         parsed_data = parse_json(data)
         if not parsed_data:
             raise HTTPException(status_code=400, detail="Parsed data is empty")
-        print('parsed_data=', parsed_data)
-        
-        # 遍历parsed_data并进行插入或更新
+        print('parsed_data=',parsed_data)
+        # 寫入program_structure
         for item in parsed_data:
-            query = "SELECT program_structure_id FROM program_structure WHERE program_structure_id = ?"
-            params = (item['program_structure_id'],)
-            existing_program_structure = queryDB(query, params)
-            
-            if existing_program_structure:
-                # 更新program_structure表
-                query = """
-                UPDATE program_structure 
-                SET category_id = ?, domain_id = ?, program_id = ?, subject_sub_id = ?
-                WHERE program_structure_id = ?
-                """
-                params = (item['category_id'], item['domain_id'], item['program_id'], item['subject_sub_id'], item['program_structure_id'])
-                updateDB(query, params)
-            else:
-                # 插入program_structure表
-                query = """
-                INSERT INTO program_structure (category_id, domain_id, program_id, program_structure_id, subject_sub_id)
-                VALUES (?, ?, ?, ?, ?)
-                """
-                params = (item['category_id'], item['domain_id'], item['program_id'], item['program_structure_id'], item['subject_sub_id'])
-                insertDB(query, params)
+            query = """
+            INSERT INTO program_structure (category_id, domain_id, program_id, program_structure_id, subject_sub_id)
+            VALUES (?, ?, ?, ?, ?)
+            """
+            params = (item['category_id'], item['domain_id'], item['program_id'], item['program_structure_id'], item['subject_sub_id'])
+            insertDB(query, params)
 
-        return {"message": "Data inserted/updated successfully"}
+        return {"message": "Data inserted successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 class UnitName(BaseModel):
     unit: str
@@ -508,23 +446,6 @@ def insertDB(query, params=None):
         print(f"SQLite error executing query: {e}")
         conn.rollback()
         return False  # 或者根据需要返回其他错误标志
-    finally:
-        conn.close()
-
-def updateDB(query, params=None):
-    conn = sqlite3.connect("./DB/program01.db")
-    cursor = conn.cursor()
-    try:
-        if params is not None:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        conn.commit()
-        return True  # 返回执行成功的标志
-    except sqlite3.Error as e:
-        print(f"SQLite error executing query: {e}")
-        conn.rollback()
-        return False  # 返回错误标志
     finally:
         conn.close()
 
