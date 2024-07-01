@@ -29,6 +29,41 @@ def get_current_time():
 
 # 加載 .env 文件中的環境變量
 load_dotenv()
+class Course(BaseModel):
+    subject_id: int
+    subject_unit: str
+    subject_sub_id: str
+    subject_sys: str
+    subject_name: str
+    subject_eng_name: str
+    subject_credit: int
+    subject_hour: int
+class Domain(BaseModel):
+    domain_id: int
+    domain_name: str
+    domain_minCredit: int
+    domain_requireNum: int
+    course: List[Course]
+class Category(BaseModel):
+    category_id: int
+    category_name: str
+    category_minCredit: int
+    category_requireNum: int
+    domain: List[Domain] = []
+    course: List[Course] = []
+class Program(BaseModel):
+    program_id: Optional[int] = None
+    program_name: str
+    program_url: str
+    program_type: str
+    program_unit: str
+    program_minCredit: int
+    program_nonSelfCredit: int
+    program_criteria: str
+    category: List[Category]
+class Pdata(BaseModel):
+    unit: str
+    program_id: int
 
 app = FastAPI()
 # origins = ["http://localhost:5173"]
@@ -124,10 +159,6 @@ async def login_for_access_token(user: User):
         )
         return {"access_token": access_token, "token_type": "bearer", "user_data": res}
 
-# 定义接收的JSON数据模型
-
-
-
 # 驗證token合法性的function
 async def verify_token(token: str = Depends(oauth2_scheme)):
     """
@@ -183,129 +214,6 @@ async def checkToken(token_data: TokenData):
         return {"status": "success", "data": payload}
     except HTTPException as e:
         raise credentials_exception
-
-
-class Course(BaseModel):
-    subject_id: int
-    subject_unit: str
-    subject_sub_id: str
-    subject_sys: str
-    subject_name: str
-    subject_eng_name: str
-    subject_credit: int
-    subject_hour: int
-
-class Domain(BaseModel):
-    domain_id: int
-    domain_name: str
-    domain_minCredit: int
-    domain_requireNum: int
-    course: List[Course]
-
-class Category(BaseModel):
-    category_id: int
-    category_name: str
-    category_minCredit: int
-    category_requireNum: int
-    domain: List[Domain] = []
-    course: List[Course] = []
-
-# class Program(BaseModel):
-#     program_name: str
-#     program_url: str
-#     program_type: str
-#     program_unit: str
-#     program_minCredit: int
-#     program_nonSelfCredit: int
-#     program_criteria: str
-#     category: List[Category]
-
-
-class Program(BaseModel):
-    program_id: Optional[int] = None
-    program_name: str
-    program_url: str
-    program_type: str
-    program_unit: str
-    program_minCredit: int
-    program_nonSelfCredit: int
-    program_criteria: str
-    category: List[Category]
-
-# def parse_json(program: Program):
-#     print("Parsing JSON data...")
-#     result = []
-#     # 找出DB中program_structure_id、program_id、category_id、domain_id的最大值
-#     query = """
-#         SELECT 
-#             MAX(program_structure_id) as program_structure_id_max,
-#             MAX(program_id) as program_id_max,
-#             MAX(category_id) as category_id_max,
-#             MAX(domain_id) as domain_id_max
-#         from program_structure
-#     """
-#     print('MAX(program_structure_id) = ', queryDB(query)[0]['program_structure_id_max'])
-#     program_structure_id = queryDB(query)[0]['program_structure_id_max'] + 1
-#     program_id = queryDB(query)[0]['program_id_max'] + 1
-#     # 每個program可以有多個category和domain，所以在foreach每個category和domain的時候才對他們的id+1
-#     category_id = queryDB(query)[0]['category_id_max']
-#     domain_id = queryDB(query)[0]['domain_id_max']
-#     # 寫入programs表
-#     query = """
-#             INSERT INTO programs (program_id, program_name, program_url, program_unit, program_type, program_minCredit, program_nonSelfCredit, program_criteria)
-#             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-#         """
-#     params = (program_id, program.program_name, program.program_url, program.program_unit, program.program_type, program.program_minCredit, program.program_nonSelfCredit, program.program_criteria)
-#     insertDB(query, params)
-
-#     print('data preloaded success...')
-#     # 寫入categories表
-#     for category in program.category:
-#         category_id += 1
-#         print('category.category_id = ',category.category_id)
-#         print('category_id = ',category_id)
-#         query = """
-#             INSERT INTO categories (category_id, category_name, category_minCredit, category_requireNum)
-#             VALUES (?, ?, ?, ?)
-#         """
-#         params = (category_id, category.category_name, category.category_minCredit, category.category_requireNum)
-#         insertDB(query, params)
-        
-#         if category.course:
-#             # print(f"Category {category_id} has courses")
-#             for course in category.course:
-#                 result.append({
-#                     'program_structure_id': program_structure_id,
-#                     'program_id': program_id,
-#                     'category_id': category_id,
-#                     'domain_id': 0,
-#                     'subject_sub_id': course.subject_sub_id
-#                 })
-#                 program_structure_id += 1
-#         elif category.domain:
-#             # 寫入domains表
-#             for domain in category.domain:
-#                 domain_id += 1
-#                 query = """
-#                     INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_requireNum)
-#                     VALUES (?, ?, ?, ?)
-#                 """
-#                 params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_requireNum)
-#                 insertDB(query, params)
-#                 for course in domain.course:
-#                     result.append({
-#                         'program_structure_id': program_structure_id,
-#                         'program_id': program_id,
-#                         'category_id': category_id,
-#                         'domain_id': domain_id,
-#                         'subject_sub_id': course.subject_sub_id
-#                     })
-#                     program_structure_id += 1
-#         # else:
-#             # 不存在沒有類別又沒有領域
-
-#     print("Finished parsing JSON data")
-#     return result
 
 def parse_json(program: Program, is_update: bool = False):
     if is_update:
@@ -383,10 +291,6 @@ def parse_json(program: Program, is_update: bool = False):
         print("Finished parsing JSON data")
     return result
 
-
-
-
-
 @app.post("/program/create")
 async def create_program(data: Program):
     try:
@@ -428,9 +332,7 @@ async def select_program(unit: UnitName):
     print(res)
     return {"data": res}
 
-class Pdata(BaseModel):
-    unit: str
-    program_id: int
+
 
 @app.post("/program/getUnitPGById")
 async def select_program(p: Pdata):
@@ -483,17 +385,6 @@ async def deleteProgram(p: ProgramID):
         queryDB_nores(query, params)
     
     return {"data": "Program and related entries deleted successfully"}
-
-
-
-# request前會先經過token驗證
-# @app.get("/program/all")
-# def get_program(token: dict = Depends(verify_token)):
-#     query = """
-#         SELECT * from programs
-#     """
-#     res = queryDB(query)
-#     return res
 
 @app.get("/program/all")
 def get_program():
@@ -573,9 +464,6 @@ def queryDB_nores(query, params=None):
     finally:
         conn.close()
 
-
-
-
 def parse_json_update(program: Program):
     print('updating program_id = ', program.program_id)
 
@@ -587,9 +475,7 @@ def parse_json_update(program: Program):
     ]
     for query, params in queries:
         queryDB_nores(query, params)
-    print('delete completed. program_id = ', program.program_id)
-
-    print("Parsing JSON data...")
+    
     result = []
     # 找出DB中program_structure_id、category_id、domain_id的最大值
     query = """
@@ -658,22 +544,14 @@ def parse_json_update(program: Program):
                         'subject_sub_id': course.subject_sub_id
                     })
                     program_structure_id += 1
-
-    print("Finished parsing JSON data")
-
     return result
-
 
 @app.post("/program/update")
 async def update_program(data: Program):
     try:
-        print('start update!!!!')
         parsed_data = parse_json_update(data)
-
-        print('parsed_data get!!!!')
         if not parsed_data:
             raise HTTPException(status_code=400, detail="Parsed data is empty")
-        print('parsed_data=',parsed_data)
         # 寫入program_structure
         for item in parsed_data:
             query = """
@@ -683,7 +561,7 @@ async def update_program(data: Program):
             params = (item['category_id'], item['domain_id'], item['program_id'], item['program_structure_id'], item['subject_sub_id'])
             insertDB(query, params)
 
-        return {"message": "Data inserted successfully"}
+        return {"message": "Data update successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
