@@ -42,13 +42,13 @@ class Domain(BaseModel):
     domain_id: int
     domain_name: str
     domain_minCredit: int
-    domain_requireNum: int
+    domain_req: int
     course: List[Course]
 class Category(BaseModel):
     category_id: int
     category_name: str
     category_minCredit: int
-    category_requireNum: int
+    category_req: int
     domain: List[Domain] = []
     course: List[Course] = []
 class Program(BaseModel):
@@ -61,9 +61,7 @@ class Program(BaseModel):
     program_nonSelfCredit: int
     program_criteria: str
     category: List[Category]
-class Pdata(BaseModel):
-    unit: str
-    program_id: int
+
 
 app = FastAPI()
 # origins = ["http://localhost:5173"]
@@ -253,10 +251,10 @@ def parse_json(program: Program, is_update: bool = False):
             print('category.category_id = ', category.category_id)
             print('category_id = ', category_id)
             query = """
-                INSERT INTO categories (category_id, category_name, category_minCredit, category_requireNum)
+                INSERT INTO categories (category_id, category_name, category_minCredit, category_req)
                 VALUES (?, ?, ?, ?)
             """
-            params = (category_id, category.category_name, category.category_minCredit, category.category_requireNum)
+            params = (category_id, category.category_name, category.category_minCredit, category.category_req)
             insertDB(query, params)
             
             if category.course:
@@ -273,10 +271,10 @@ def parse_json(program: Program, is_update: bool = False):
                 for domain in category.domain:
                     domain_id += 1
                     query = """
-                        INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_requireNum)
+                        INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_req)
                         VALUES (?, ?, ?, ?)
                     """
-                    params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_requireNum)
+                    params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_req)
                     insertDB(query, params)
                     for course in domain.course:
                         result.append({
@@ -311,49 +309,66 @@ async def create_program(data: Program):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-class UnitName(BaseModel):
-    unit: str
 
-@app.post("/program/getUnitPrograms")
-async def select_program(unit: UnitName):
-    print('unit = ',unit.unit)
-    query = """
-        SELECT 
-        *
-        FROM program_structure ps
-        INNER JOIN programs p ON p.program_id = ps.program_id
-        INNER JOIN categories c ON ps.category_id = c.category_id
-        LEFT JOIN domains d ON ps.domain_id = d.domain_id
-        INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
-        where program_unit = ?
-    """
-    params = (unit.unit,)  # 修改成元组形式
+
+# @app.post("/program/getUnitPrograms")
+# async def select_program(unit: UnitName):
+#     print('unit = ',unit.unit)
+#     query = """
+#         SELECT 
+#         *
+#         FROM program_structure ps
+#         INNER JOIN programs p ON p.program_id = ps.program_id
+#         INNER JOIN categories c ON ps.category_id = c.category_id
+#         LEFT JOIN domains d ON ps.domain_id = d.domain_id
+#         INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
+#         where program_unit = ?
+#     """
+#     params = (unit.unit,)  # 修改成元组形式
+#     res = queryDB(query, params)
+#     print(res)
+#     return {"data": res}
+
+class Pdata(BaseModel):
+    unit: str
+    program_id: int
+@app.post("/program/getUnitPGById")
+async def browse_program_edit(p: Pdata):
+    print('unit = ',p.unit)
+    print('p.program_id = ',p.program_id)
+    
+    if p.unit == '教務處課務組':
+        query = """
+            SELECT 
+            *
+            FROM program_structure ps
+            INNER JOIN programs p ON p.program_id = ps.program_id
+            INNER JOIN categories c ON ps.category_id = c.category_id
+            LEFT JOIN domains d ON ps.domain_id = d.domain_id
+            INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
+            where ps.program_id = ?
+        """
+        params = (p.program_id,) 
+    else:
+        query = """
+            SELECT 
+            *
+            FROM program_structure ps
+            INNER JOIN programs p ON p.program_id = ps.program_id
+            INNER JOIN categories c ON ps.category_id = c.category_id
+            LEFT JOIN domains d ON ps.domain_id = d.domain_id
+            INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
+            where program_unit = ? and ps.program_id = ?
+        """
+        params = (p.unit,p.program_id)  # 修改成元组形式
     res = queryDB(query, params)
     print(res)
     return {"data": res}
 
-
-
-@app.post("/program/getUnitPGById")
-async def select_program(p: Pdata):
-    # print('unit = ',p.unit)
-    query = """
-        SELECT 
-        *
-        FROM program_structure ps
-        INNER JOIN programs p ON p.program_id = ps.program_id
-        INNER JOIN categories c ON ps.category_id = c.category_id
-        LEFT JOIN domains d ON ps.domain_id = d.domain_id
-        INNER JOIN subjects s ON ps.subject_sub_id = s.subject_sub_id
-        where program_unit = ? and ps.program_id = ?
-    """
-    params = (p.unit,p.program_id)  # 修改成元组形式
-    res = queryDB(query, params)
-    # print(res)
-    return {"data": res}
-
+class UnitName(BaseModel):
+    unit: str
 @app.post("/program/getUnitPG")
-async def select_program(input: UnitName):
+async def browse_program(input: UnitName):
     # print('unit = ',input.unit)
     if input.unit == '教務處課務組':
         query = "SELECT * FROM programs"
@@ -370,7 +385,6 @@ async def select_program(input: UnitName):
 
 class ProgramID(BaseModel):
     program_id: int
-
 @app.post("/program/delete_program")
 async def deleteProgram(p: ProgramID):
     print('program_id = ', p.program_id)
@@ -407,6 +421,23 @@ def get_fakeprogram_all():
     """
     res = queryDB(query)
     return res
+
+class TargetProgram(BaseModel):
+    program_id: int
+
+@app.get("/student/getPassedProgram")
+def get_passed_program(p: TargetProgram):
+    query = """
+        select * from program_structure
+        where program_id = ?
+    """
+
+    params = (p.program_id)
+
+    res = queryDB(query, params)
+    print(res)
+    return {"message": "檢查完畢。"}
+
 
 @app.get("/subject/all")
 def get_subject_all():
@@ -510,10 +541,10 @@ def parse_json_update(program: Program):
         print('category.category_id = ', category.category_id)
         print('category_id = ', category_id)
         query = """
-            INSERT INTO categories (category_id, category_name, category_minCredit, category_requireNum)
+            INSERT INTO categories (category_id, category_name, category_minCredit, category_req)
             VALUES (?, ?, ?, ?)
         """
-        params = (category_id, category.category_name, category.category_minCredit, category.category_requireNum)
+        params = (category_id, category.category_name, category.category_minCredit, category.category_req)
         insertDB(query, params)
         
         if category.course:
@@ -530,10 +561,10 @@ def parse_json_update(program: Program):
             for domain in category.domain:
                 domain_id += 1
                 query = """
-                    INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_requireNum)
+                    INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_req)
                     VALUES (?, ?, ?, ?)
                 """
-                params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_requireNum)
+                params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_req)
                 insertDB(query, params)
                 for course in domain.course:
                     result.append({
@@ -566,7 +597,87 @@ async def update_program(data: Program):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.get("/program/program_structure/{pid}")
+async def getPCnum(pid: int):
+
+    query = """
+        select DISTINCT category_id,domain_id
+        from program_structure ps
+        where ps.program_id = ?
+    """
+    params = (pid, )
+    res = queryDB(query,params)
+
+    return res
 
 
+@app.get("/program/categories/{pid}")
+async def getPCnum(pid: int):
 
+    query = """
+        SELECT * from categories
+        WHERE category_id in
+        (select DISTINCT category_id
+        from program_structure ps
+        where ps.program_id = ?)
+    """
+    params = (pid, )
+    res = queryDB(query,params)
+
+    return res
+
+@app.get("/program/categories/{sid}/{pid}/{cid}")
+async def getCATEpass(sid: str ,pid: int, cid: int):
+
+    query = """
+SELECT s.subject_sub_id, s.subject_unit, s.subject_sys, s.subject_name, s.subject_credit, sc.score from subjects s
+join scores sc on sc.subject_sub_id = s.subject_sub_id
+WHERE 
+sc.student_id = ?
+AND
+s.subject_sub_id in (
+	SELECT subject_sub_id FROM (
+		select * from program_structure ps
+		join categories c on ps.category_id = c.category_id
+		left join domains d on ps.domain_id = d.domain_id
+		where ps.program_id = ? and ps.category_id = ?
+	) 
+	WHERE subject_sub_id in (
+		SELECT subject_sub_id FROM scores sc
+		WHERE sc.student_id = ? AND sc.score >= 60
+	)
+)
+    """
+    params = (sid, pid, cid, sid)
+    res = queryDB(query,params)
+
+    return res
     
+@app.get("/program/domains/{sid}/{pid}/{cid}")
+async def getDOMpass(sid: str ,pid: int, cid: int):
+
+    query = """
+SELECT s.subject_sub_id, s.subject_unit, s.subject_sys, s.subject_name, s.subject_credit, sc.score from subjects s
+join scores sc on sc.subject_sub_id = s.subject_sub_id
+WHERE 
+sc.student_id = ?
+AND
+s.subject_sub_id in (
+	SELECT subject_sub_id FROM (
+		select * from program_structure ps
+		join categories c on ps.category_id = c.category_id
+		left join domains d on ps.domain_id = d.domain_id
+		where ps.program_id = ? and ps.domain_id = ?
+	) 
+	WHERE subject_sub_id in (
+		SELECT subject_sub_id FROM scores sc
+		WHERE sc.student_id = ? AND sc.score >= 60
+	)
+)
+    """
+    params = (sid, pid, cid, sid)
+    res = queryDB(query,params)
+
+    return res
+
+
