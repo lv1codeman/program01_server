@@ -680,4 +680,20 @@ s.subject_sub_id in (
 
     return res
 
+@app.get("/program/getPS/{pid}")
+async def getPS(pid: int):
 
+    query = """
+SELECT DISTINCT 
+ps.program_id, ps.category_id, ps.domain_id, 
+c.category_name,c.category_minCredit, c.category_req, 
+d.domain_name,d.domain_minCredit, d.domain_req
+from program_structure ps
+join categories c on ps.category_id = c.category_id
+left join domains d on ps.domain_id = d.domain_id
+WHERE ps.program_id=?
+    """
+    params = (pid, )
+    res = queryDB(query,params)
+
+    return res
