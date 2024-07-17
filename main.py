@@ -21,6 +21,7 @@ import base64
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import itertools
+from sqlalchemy import text
 
 def get_current_time():
     current_time = datetime.now()
@@ -41,14 +42,15 @@ class Course(BaseModel):
 class Domain(BaseModel):
     domain_id: int
     domain_name: str
-    domain_minCredit: int
-    domain_req: int
+    domain_goal: int
+    domain_goalCredit: int
     course: List[Course]
 class Category(BaseModel):
     category_id: int
     category_name: str
-    category_minCredit: int
-    category_req: int
+    category_hasDomain: int
+    category_goal: int
+    category_goalCredit: int
     domain: List[Domain] = []
     course: List[Course] = []
 class Program(BaseModel):
@@ -251,10 +253,11 @@ def parse_json(program: Program, is_update: bool = False):
             print('category.category_id = ', category.category_id)
             print('category_id = ', category_id)
             query = """
-                INSERT INTO categories (category_id, category_name, category_minCredit, category_req)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO categories (category_id, category_name, category_hasDomain, category_goal, category_goalCredit)
+                VALUES (?, ?, ?, ?, ?)
             """
-            params = (category_id, category.category_name, category.category_minCredit, category.category_req)
+            params = (category_id, category.category_name, category.category_hasDomain, category.category_goal, category.category_goalCredit)
+            print('有跑到這喔')
             insertDB(query, params)
             
             if category.course:
@@ -271,10 +274,10 @@ def parse_json(program: Program, is_update: bool = False):
                 for domain in category.domain:
                     domain_id += 1
                     query = """
-                        INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_req)
+                        INSERT INTO domains (domain_id, domain_name, domain_goal, domain_goalCredit)
                         VALUES (?, ?, ?, ?)
                     """
-                    params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_req)
+                    params = (domain_id, domain.domain_name, domain.domain_goal, domain.domain_goalCredit)
                     insertDB(query, params)
                     for course in domain.course:
                         result.append({
@@ -541,10 +544,10 @@ def parse_json_update(program: Program):
         print('category.category_id = ', category.category_id)
         print('category_id = ', category_id)
         query = """
-            INSERT INTO categories (category_id, category_name, category_minCredit, category_req)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO categories (category_id, category_name, category_hasDomain, category_goal, category_goalCredit)
+            VALUES (?, ?, ?, ?,?)
         """
-        params = (category_id, category.category_name, category.category_minCredit, category.category_req)
+        params = (category_id, category.category_name, category.category_hasDomain, category.category_goal, category.category_goalCredit)
         insertDB(query, params)
         
         if category.course:
@@ -561,10 +564,10 @@ def parse_json_update(program: Program):
             for domain in category.domain:
                 domain_id += 1
                 query = """
-                    INSERT INTO domains (domain_id, domain_name, domain_minCredit, domain_req)
+                    INSERT INTO domains (domain_id, domain_name, domain_goal, domain_goalCredit)
                     VALUES (?, ?, ?, ?)
                 """
-                params = (domain_id, domain.domain_name, domain.domain_minCredit, domain.domain_req)
+                params = (domain_id, domain.domain_name, domain.domain_goal, domain.domain_goalCredit)
                 insertDB(query, params)
                 for course in domain.course:
                     result.append({
@@ -686,8 +689,8 @@ async def getPS(pid: int):
     query = """
 SELECT DISTINCT 
 ps.program_id, ps.category_id, ps.domain_id, 
-c.category_name,c.category_minCredit, c.category_req, 
-d.domain_name,d.domain_minCredit, d.domain_req
+c.category_name,c.category_hasDomain, c.category_goal, c.category_goalCredit, 
+d.domain_name,d.domain_goal, d.domain_goalCredit
 from program_structure ps
 join categories c on ps.category_id = c.category_id
 left join domains d on ps.domain_id = d.domain_id
@@ -697,3 +700,29 @@ WHERE ps.program_id=?
     res = queryDB(query,params)
 
     return res
+
+@app.get("/program/getTargetStruct/{pid}/{cid}/{did}")
+async def getTargetStruct(pid: int, cid: int, did: int):
+    if did == 0:
+        query = """
+select * from program_structure ps
+join categories c on ps.category_id = c.category_id
+left join domains d on ps.domain_id = d.domain_id
+where ps.program_id = ? and ps.category_id = ? and ps.domain_id = ?
+    """
+        params = (pid, cid, did)
+    else:
+        query = """
+select * from program_structure ps
+join categories c on ps.category_id = c.category_id
+left join domains d on ps.domain_id = d.domain_id
+where ps.program_id = ? and ps.category_id = ? and ps.domain_id = ps.domain_id
+    """
+        params = (pid, cid, )
+
+    
+    res = queryDB(query,params)
+
+    return res
+
+
