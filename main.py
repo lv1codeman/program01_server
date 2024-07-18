@@ -36,20 +36,20 @@ class Course(BaseModel):
     subject_sub_id: str
     subject_sys: str
     subject_name: str
-    subject_eng_name: str
+    subject_eng_name: Optional[str] = None
     subject_credit: int
     subject_hour: int
 class Domain(BaseModel):
     domain_id: int
     domain_name: str
-    domain_goal: int
+    domain_goal: str
     domain_goalCredit: int
     course: List[Course]
 class Category(BaseModel):
     category_id: int
     category_name: str
     category_hasDomain: int
-    category_goal: int
+    category_goal: str
     category_goalCredit: int
     domain: List[Domain] = []
     course: List[Course] = []
