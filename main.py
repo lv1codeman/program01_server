@@ -686,10 +686,11 @@ async def getPS(pid: int):
 
     query = """
 SELECT DISTINCT 
-ps.program_id, ps.category_id, ps.domain_id, 
-c.category_name,c.category_domain_reqnum, c.category_goal, c.category_goalCredit, 
+ps.program_id, p.program_criteria, ps.category_id, ps.domain_id, 
+c.category_name,c.category_domain_reqnum, c.category_goal, 
 d.domain_name,d.domain_goal
 from program_structure ps
+join programs p on p.program_id = ps.program_id
 join categories c on ps.category_id = c.category_id
 left join domains d on ps.domain_id = d.domain_id
 WHERE ps.program_id=?
