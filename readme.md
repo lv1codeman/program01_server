@@ -1,6 +1,7 @@
 ## 介紹
 
 Program01 的 server 端
+使用的資料庫路徑: ./DB/program01.db
 
 ## 執行前安裝
 
